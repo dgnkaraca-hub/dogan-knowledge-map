@@ -1,0 +1,33 @@
+{
+  "name": "dogan-knowledge-map",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "An interactive knowledge-map portfolio for Dogan Karaca, mapping a multidisciplinary practice across sound, image, data, and cultural memory.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "d3-force": "^3.0.0",
+    "framer-motion": "^11.3.19",
+    "lucide-react": "^0.439.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "jsdom": "^24.1.3",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.7",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.5",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

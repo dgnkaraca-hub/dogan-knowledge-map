@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build output
+dist
+dist-ssr
+dist-standalone
+*.local
+
+# Single-file standalone artifact (regenerate with the singlefile config)
+/dogan-knowledge-map.html
+
+# Generated design preview screenshots
+previews/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# TypeScript build info / emitted config
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
