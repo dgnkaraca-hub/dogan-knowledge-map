@@ -4,9 +4,12 @@ name: Deploy to GitHub Pages
 # One-time setup in the repo: Settings -> Pages -> Build and deployment ->
 # Source: "GitHub Actions".
 
+# Auto-deploy on push is disabled while this repo is private — GitHub Pages
+# needs a public repo (or GitHub Pro). To turn on automatic deploys later,
+# make the repo public (or upgrade) and restore the push trigger:
+#   push:
+#     branches: [main]
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
