@@ -1,28 +1,29 @@
 /* ============================================================
    useForceGraph.ts
    ------------------------------------------------------------
-   A live, draggable d3-force simulation that drives the network
-   view. React owns the *state* (focus, area); this hook owns the
-   *motion*.
+   The live motion engine for the honeycomb map. React owns the
+   *state* (focus, area); this hook owns the *motion*.
 
-   - In the network view (focus = null) the simulation ticks every
-     frame, kept gently warm so the web drifts like it is floating
-     in space, and nodes can be grabbed and thrown around.
-   - In the focus view the simulation is paused and nodes ease
-     toward the fan-tree targets instead; on return to the network
-     the sim reheats and carries on from wherever things landed.
+   Layout is fully deterministic (computeNetwork snaps nodes to
+   hex cells; computeTargets fans the focus tree), so there is no
+   force simulation anymore — a single requestAnimationFrame loop
+   eases every node toward its current target each frame:
 
-   Positions are written straight to the DOM (node transforms, line
-   endpoints, thread paths) so the graph never re-renders per frame.
+   - Network view: targets are the hex-lattice homes. A dragged
+     node follows the pointer directly and springs back to its
+     cell on release.
+   - Focus view: targets are the fan-tree positions, unfurling
+     petal-by-petal via a per-leaf stagger.
+
+   Positions are written straight to the DOM (node transforms,
+   connector path `d`s) so the graph never re-renders per frame.
+   The loop is visibility-gated and honors reduced motion.
    ============================================================ */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { forceSimulation, forceManyBody } from "d3-force";
 import {
-  buildSimLinks,
   buildSimNodes,
   clampToArea,
-  configureForces,
   hexElbowPath,
   type Area,
   type Graph,
@@ -42,9 +43,9 @@ interface UseForceGraphArgs {
   data: import("../data/mapData").MapData;
   graph: Graph;
   area: Area;
-  /** Frozen solve used to seed the live sim so it opens settled. */
+  /** Deterministic hex layout used to seed node positions. */
   network: NetworkLayout;
-  /** Fan-tree targets, read every frame while focused. */
+  /** Per-node targets (hex homes / fan tree), read every frame. */
   targetsRef: { current: Record<string, NodeTarget> };
   focus: string | null;
   reduceMotion: boolean;
@@ -70,7 +71,6 @@ export function useForceGraph({
   active,
   refs,
 }: UseForceGraphArgs): ForceGraphControls {
-  const simRef = useRef<ReturnType<typeof forceSimulation<SimNode>> | null>(null);
   const nodesRef = useRef<Map<string, SimNode>>(new Map());
   const draggingRef = useRef<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -78,18 +78,12 @@ export function useForceGraph({
   const rafRef = useRef<number | null>(null);
   // Timestamp the moment focus opens, so leaves can unfurl staggered.
   const focusStartRef = useRef<number>(0);
-  // rAF handle for the charge "breathe-out" ramp when leaving focus.
-  const chargeRafRef = useRef<number | null>(null);
 
-  // Build (or rebuild) the simulation when the graph or the size changes.
+  // Build (or rebuild) the position holders when the graph or size changes.
   useEffect(() => {
     if (area.w === 0 || area.h === 0) return;
     const seed = network.pos.size > 0 ? network.pos : undefined;
     const nodes = buildSimNodes(data, area, graph, seed);
-    const links = buildSimLinks(graph);
-    const sim = configureForces(forceSimulation(nodes).stop(), links);
-    sim.velocityDecay(0.9).alphaDecay(0.02).alphaMin(0).alphaTarget(0.012).alpha(0.7);
-    simRef.current = sim;
     const m = new Map<string, SimNode>();
     nodes.forEach((n) => m.set(n.id, n));
     nodesRef.current = m;
@@ -98,48 +92,12 @@ export function useForceGraph({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph, area.w, area.h]);
 
-  // Track focus; reheat the sim when returning to the network view.
+  // Track focus; stamp the fan clock when a domain opens.
   useEffect(() => {
     focusRef.current = focus;
-    const sim = simRef.current;
-    const now = typeof performance !== "undefined" ? performance.now() : 0;
-    if (!sim) return;
-
     if (focus) {
-      // Opening focus: stamp the fan clock and cancel any in-flight breathe-out.
-      focusStartRef.current = now;
-      if (chargeRafRef.current !== null) {
-        cancelAnimationFrame(chargeRafRef.current);
-        chargeRafRef.current = null;
-      }
-      return;
+      focusStartRef.current = typeof performance !== "undefined" ? performance.now() : 0;
     }
-
-    // Leaving focus: the leaves are packed tightly at the bottom hub. Full
-    // repulsion (-95) would explode them apart in one jolt, so ramp the charge
-    // from soft to full over ~420ms and reheat with a modest alpha — the cloud
-    // breathes back out instead of popping.
-    const charge = sim.force("charge") as ReturnType<typeof forceManyBody<SimNode>> | undefined;
-    if (charge) {
-      const FROM = -40;
-      const TO = -95;
-      const DUR = 420;
-      const ramp = (ts: number) => {
-        const p = Math.min(1, (ts - now) / DUR);
-        charge.strength(FROM + (TO - FROM) * p);
-        if (p < 1) chargeRafRef.current = requestAnimationFrame(ramp);
-        else chargeRafRef.current = null;
-      };
-      chargeRafRef.current = requestAnimationFrame(ramp);
-    }
-    sim.alpha(Math.max(sim.alpha(), 0.32));
-
-    return () => {
-      if (chargeRafRef.current !== null) {
-        cancelAnimationFrame(chargeRafRef.current);
-        chargeRafRef.current = null;
-      }
-    };
   }, [focus]);
 
   // The single animation loop.
@@ -150,7 +108,7 @@ export function useForceGraph({
       return;
     }
     // Per-frame easing baseline (the feel knob), normalized below so the
-    // tree converges at the same rate on 60Hz and 120Hz displays.
+    // motion converges at the same rate on 60Hz and 120Hz displays.
     const easeBase = 0.14;
     let lastTs = 0;
 
@@ -166,10 +124,10 @@ export function useForceGraph({
       if (nodes.size) {
         const focused = focusRef.current;
         const elapsed = now - focusStartRef.current;
-        // Both states ease toward their targets — the symmetric mandala in the
-        // network view, the fan tree in focus. With no force tick the network
-        // stays perfectly symmetric, and a dragged node springs back home on
-        // release. Snap within 0.3px so the lerp arrives instead of coasting.
+        // Both states ease toward their targets — the hex lattice in the
+        // network view, the fan tree in focus. A dragged node is skipped
+        // (it follows the pointer) and springs back home on release.
+        // Snap within 0.3px so the lerp arrives instead of coasting.
         nodes.forEach((n) => {
           if (n.id === draggingRef.current) return;
           const t = targets[n.id];
@@ -247,14 +205,10 @@ export function useForceGraph({
       const n = nodesRef.current.get(id);
       if (!n) return;
       const c = clampToArea(x, y, area);
-      n.fx = c.x;
-      n.fy = c.y;
       n.x = c.x;
       n.y = c.y;
       draggingRef.current = id;
       setDraggingId(id);
-      // Heat is applied on actual movement (moveDrag), so a plain click that
-      // happens to start a drag does not jolt the whole graph.
     },
     [area],
   );
@@ -265,29 +219,23 @@ export function useForceGraph({
       if (!id) return;
       const n = nodesRef.current.get(id);
       if (n) {
-        // Clamp so a thrown node can't be parked outside the viewport.
+        // Write the position directly — the loop skips the dragged node, so
+        // this is what makes it follow the pointer. Clamped so a node can't
+        // be parked outside the viewport.
         const c = clampToArea(x, y, area);
-        n.fx = c.x;
-        n.fy = c.y;
+        n.x = c.x;
+        n.y = c.y;
       }
-      const sim = simRef.current;
-      if (sim && sim.alpha() < 0.3) sim.alpha(0.3);
     },
     [area],
   );
 
   const endDrag = useCallback(() => {
-    const id = draggingRef.current;
-    if (!id) return;
-    const n = nodesRef.current.get(id);
-    if (n) {
-      n.fx = null;
-      n.fy = null;
-    }
+    if (!draggingRef.current) return;
+    // Nothing else to do: once the node is no longer flagged as dragging,
+    // the loop eases it back to its hex home — the spring-back.
     draggingRef.current = null;
     setDraggingId(null);
-    const sim = simRef.current;
-    if (sim) sim.alpha(Math.max(sim.alpha(), 0.35));
   }, []);
 
   return { startDrag, moveDrag, endDrag, draggingId };

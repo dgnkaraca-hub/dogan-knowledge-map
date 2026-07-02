@@ -108,6 +108,13 @@ function crossDomainBridges(data: MapData) {
 
 export default function Dashboards({ data, onOpenMap }: DashboardsProps) {
   const { top: bridges, crossCount } = crossDomainBridges(data);
+  const facetCount = data.domains.reduce((n, d) => n + d.children.length, 0);
+  const stats = [
+    { value: String(data.domains.length), label: "domains" },
+    { value: String(facetCount), label: "facets" },
+    { value: String(data.relations.length), label: "threads" },
+    { value: String(data.selectedWorks.length), label: "selected works" },
+  ];
 
   return (
     <div className="absolute inset-x-0 bottom-0 top-16 overflow-y-auto px-[clamp(20px,5vw,72px)] pb-20 pt-[30px]">
@@ -127,6 +134,15 @@ export default function Dashboards({ data, onOpenMap }: DashboardsProps) {
             {data.center.thesis} Selected works, skills, public appearances, teaching, and research,
             read as one connected body of work.
           </p>
+          {/* Practice overview, computed from the same data the map draws. */}
+          <div className="dash-stats" aria-label="Practice overview">
+            {stats.map((s) => (
+              <span key={s.label} className="dash-stat">
+                <span className="dash-stat-v">{s.value}</span>
+                <span className="dash-stat-k">{s.label}</span>
+              </span>
+            ))}
+          </div>
         </motion.div>
 
         {/* Grid */}
@@ -263,7 +279,14 @@ export default function Dashboards({ data, onOpenMap }: DashboardsProps) {
                     ? { target: "_blank", rel: "noopener noreferrer" }
                     : {})}
                 >
-                  <span>{a.label}</span>
+                  <span>
+                    {a.label}
+                    {a.note ? (
+                      <span className="ml-2 text-[9px] uppercase tracking-[0.14em] text-muted">
+                        {a.note}
+                      </span>
+                    ) : null}
+                  </span>
                   <span style={{ color: "var(--muted)" }}>↗</span>
                 </a>
               ))}

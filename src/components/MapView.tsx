@@ -138,7 +138,7 @@ export default function MapView({
       <div className="map-hint">
         {focus
           ? "Press Esc or click outside to return · ← → to switch domains"
-          : "Select a domain to open its branch · drag nodes to explore"}
+          : "Select a domain to open its branch · drag nodes to explore · ⌘K to search"}
       </div>
 
       {/* Legend belongs to the overview; hidden in focus so it never collides

@@ -596,7 +596,12 @@ export function computeTargets(
       // FOCUS: other domains recede to faint edge labels; leaves hidden.
       const dp = network.pos.get(d.id) ?? { x: area.cx + rx * cosA, y: area.cy + ry * sinA };
       targets[d.id] = { tx: dp.x, ty: dp.y, hidden: true, dim: true, size: 0 };
-      domainLabels[d.id] = { ...labelAnchor, dim: true, hidden: false };
+      // Hide dimmed rim labels that would sit behind the bottom-center hub.
+      domainLabels[d.id] = {
+        ...labelAnchor,
+        dim: true,
+        hidden: labelAnchor.y > area.h * 0.8,
+      };
       d.children.forEach((c) => {
         targets[c.id] = { tx: dp.x, ty: dp.y, hidden: true, dim: true, size: 0 };
         lineStates[`branch-${c.id}`] = { dim: false, active: false, on: false };

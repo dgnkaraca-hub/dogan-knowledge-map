@@ -271,9 +271,14 @@ export default function RadialMap({
       <svg className="line-svg" aria-hidden="true">
         {graph.lines.map((l) => {
           const st = layout.lineStates[l.id] ?? { dim: false, active: false, on: false };
+          // Threads touching the selected node brighten so its connections read.
+          const isRelated =
+            l.kind === "relation" &&
+            selectedId !== null &&
+            (l.fromId === selectedId || l.toId === selectedId);
           const cls =
             l.kind === "relation"
-              ? `thread${st.on ? " on" : ""}`
+              ? `thread${st.on ? " on" : ""}${isRelated ? " is-related" : ""}`
               : l.kind === "spoke"
                 ? `spoke${st.dim ? " dim" : ""}${st.active ? " active" : ""}`
                 : `branch${st.on ? " on" : ""}${st.active ? " active" : ""}`;
